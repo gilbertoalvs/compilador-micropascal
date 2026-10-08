@@ -1,0 +1,12 @@
+# Executáveis
+*.exe
+*.out
+*.app
+a.out
+
+# Arquivos de objeto e compilação
+*.o
+*.obj
+
+# Pastas de configuração local do VS Code
+.vscode/
