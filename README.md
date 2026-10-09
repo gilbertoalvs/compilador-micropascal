@@ -11,5 +11,4 @@ Robson Lins
 * Dyanndra Ribeiro
 
 ## Estrutura do Repositório
-* `/src`: Implementação principal em C (`Lexer.c`, `Parser.c`, `main.c`).
-* `/include`: Ficheiros de cabeçalho (`.h`) contendo as definições de tokens e assinaturas.
+* `/src`: Implementação principal em C (`Lexer.c`, `Parser.c`, `main.c`). Além dos ficheiros de cabeçalho (`.h`) contendo as definições de tokens e assinaturas.
