@@ -1,17 +1,29 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stddef.h>
+#include "lexer.h"
 
-#include "Lexer.h"
-
-// Variaveis globais
 int posicao = 0;
-char expr_texto[2048];
+char expr_texto[TAM_FONTE];
 
-// Funções:
+const char *nome_token[] = {
+    "ERRO", "EOF", "IDENTIFICADOR", "INTEIRO_LITERAL", "REAL_LITERAL", "CHAR_LITERAL",
+    "PROGRAM", "IF", "THEN", "ELSE", "WHILE", "DO", "REPEAT", "UNTIL", "INTEGER", "REAL", "CHAR", "BEGIN", "END", "WRITE", "VAR",
+    "DIV", "AND", "OR", "NOT",
+    "MAIS", "MENOS", "MULT", "DIVISAO_REAL",
+    "ATRIBUICAO", "IGUAL", "DIFERENTE",
+    "MENOR", "MAIOR", "MENOR_IGUAL", "MAIOR_IGUAL",
+    "DOIS_PONTOS", "PONTO_VIRGULA", "VIRGULA", "PONTO",
+    "ABRE_PAR", "FECHA_PAR"
+};
+
 int eh_letra(char c){
-    return isalpha(c) || c == '_';
+    return isalpha((unsigned char)c) || c == '_';
+}
+
+int eh_digito(char c){
+    return isdigit((unsigned char)c);
 }
 
 TokenType verificar_palavra_reservada(char* lexema){
@@ -34,8 +46,14 @@ TokenType verificar_palavra_reservada(char* lexema){
     if(strcmp(lexema, "and") == 0) return T_AND;
     if(strcmp(lexema, "or") == 0) return T_OR;
     if(strcmp(lexema, "not") == 0) return T_NOT;
+    return T_IDENT; 
+}
 
-    return T_IDENT; // Se não for nenhuma, é um identificador normal.
+static void copiar_lexema(char *destino, size_t capacidade, const char *origem, size_t tamanho) {
+    if (capacidade == 0) return;
+    if (tamanho >= capacidade) tamanho = capacidade - 1;
+    memcpy(destino, origem, tamanho);
+    destino[tamanho] = '\0';
 }
 
 Token proximo_token(void){
@@ -45,10 +63,19 @@ Token proximo_token(void){
 
     char atual = expr_texto[posicao];
 
-    //Elimina espaços em branco e quebras de linha
-    while(atual == ' ' || atual == '\n' || atual == '\t' || atual == '\r'){
-        posicao++;
-        atual = expr_texto[posicao];
+    while(1){
+        while(atual == ' ' || atual == '\n' || atual == '\t' || atual == '\r'){
+            posicao++;
+            atual = expr_texto[posicao];
+        }
+        if(atual == '/' && expr_texto[posicao+1] == '/'){
+            while(atual != '\n' && atual != '\0'){
+                posicao++;
+                atual = expr_texto[posicao];
+            }
+            continue;
+        }
+        break;
     }
 
     if(atual == '\0'){
@@ -57,62 +84,56 @@ Token proximo_token(void){
         return t;
     }
 
-    // Identificadores e palavras reservadas:
     if(eh_letra(atual)){
         int inicio = posicao;
-        while(eh_letra(atual) || isdigit(atual)){
+        while(eh_letra(atual) || eh_digito(atual)){
             posicao++;
             atual = expr_texto[posicao];
         }
-        strncpy(t.lexema, &expr_texto[inicio], posicao - inicio);
+        copiar_lexema(t.lexema, sizeof(t.lexema), &expr_texto[inicio], (size_t)(posicao - inicio));
         t.tipo = verificar_palavra_reservada(t.lexema);
         return t;
     }
 
-    // Numeros inteiros e reais:
-    if(isdigit(atual)){
+    if(eh_digito(atual) || (atual == '.' && eh_digito(expr_texto[posicao + 1]))){
         int inicio = posicao;
-        int tem_ponto = 0;
+        while(eh_digito(expr_texto[posicao])) posicao++;
 
-        while(isdigit(atual) || atual == '.'){
-            if(atual == '.'){
-                if(tem_ponto) break;
-                tem_ponto = 1;
-            }
+        if(expr_texto[posicao] == '.' && eh_digito(expr_texto[posicao + 1])){
             posicao++;
-            atual = expr_texto[posicao];
-        }
-
-        strncpy(t.lexema, &expr_texto[inicio], posicao - inicio);
-        if(tem_ponto){
+            while(eh_digito(expr_texto[posicao])) posicao++;
             t.tipo = T_REAL_LIT;
-        } else{
+        } else {
             t.tipo = T_INT_LIT;
         }
-
+        copiar_lexema(t.lexema, sizeof(t.lexema), &expr_texto[inicio], (size_t)(posicao - inicio));
         return t;
     }
 
-    // Char literal ('a', '\n'):
-    if (atual == '\''){
+    if(atual == '\''){
         int inicio = posicao;
         posicao++;
-
-        while(expr_texto[posicao] != '\'' && expr_texto[posicao] != '\0'){
+        if(expr_texto[posicao] == '\\' && (expr_texto[posicao + 1] == 'n' || expr_texto[posicao + 1] == 't')){
+            posicao += 2;
+        } else if(eh_letra(expr_texto[posicao]) || eh_digito(expr_texto[posicao])){
             posicao++;
+        } else {
+            printf("Erro lexico no caracter [%c]\n", '\'');
+            t.tipo = T_ERRO;
+            strcpy(t.lexema, "'");
+            return t;
         }
-
-        if(expr_texto[posicao] == '\''){
-            posicao++; // Inclui aspas de fechamento
+        if(expr_texto[posicao] != '\''){
+            printf("Erro léxico no caracter [%c]\n", '\'');
+            t.tipo = T_ERRO;
+            strcpy(t.lexema, "'");
+            return t;
         }
-
-        strncpy(t.lexema, &expr_texto[inicio], posicao - inicio);
+        posicao++; 
+        copiar_lexema(t.lexema, sizeof(t.lexema), &expr_texto[inicio], (size_t)(posicao - inicio));
         t.tipo = T_CHAR_LIT;
         return t;
     }
-
-    // Operadoes compostos e simples:
-    int inicio = posicao;
 
     switch(atual){
         case ':':
@@ -154,8 +175,6 @@ Token proximo_token(void){
             t.tipo = T_MAIOR;
             posicao++;
             return t;
-        
-        //Operadores de um caractere
         case '=': t.tipo = T_IGUAL; strcpy(t.lexema, "="); posicao++; return t;
         case '+': t.tipo = T_MAIS; strcpy(t.lexema, "+"); posicao++; return t;
         case '-': t.tipo = T_MENOS; strcpy(t.lexema, "-"); posicao++; return t;
@@ -168,8 +187,7 @@ Token proximo_token(void){
         case ')': t.tipo = T_FECHA_PAR; strcpy(t.lexema, ")"); posicao++; return t;
     }
 
-    // Se chegou aqui o caractere é inválido.
-    printf("Erro lexico no caracter [%c]\n", atual);
+    printf("Erro léxico no caracter [%c]\n", atual);
     posicao++;
     return t;
 }
